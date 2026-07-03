@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego del Impostor P2P Estable</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a2e;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #162447;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            text-align: center;
+            width: 90%;
+            max-width: 450px;
+        }
+        h1 { color: #e43f5a; margin-top: 0; }
+        input, button {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: none;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input { background-color: #fff; color: #333; }
+        button {
+            background-color: #e43f5a;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: #ff4b6b; }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        .screen { display: none; }
+        .active { display: block; }
+        .player-list {
+            text-align: left;
+            background: #1f4068;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .role-box {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .impostor { background-color: #8b0000; color: #ff4c4c; }
+        .civil { background-color: #006400; color: #4cd137; }
+        .admin-badge {
+            color: #f1c40f;
+            font-size: 12px;
+            font-weight: bold;
+            border: 1px solid #f1c40f;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 5px;
+        }
+        .code-box {
+            background: #101935;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+    </style>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+<div class="container">
+    <!-- NUEVA PANTALLA INICIAL: SELECCIÓN DE MODO -->
+    <div id="screen-mode" class="screen active">
+        <h1>El Impostor</h1>
+        <p>¿Qué quieres hacer?</p>
+        <button onclick="selectMode('create')">Crear Nueva Sala</button>
+        <button onclick="selectMode('join')" style="background-color: #1f4068;">Unirse a una Sala</button>
+    </div>
+
+    <!-- PANTALLA DE LOGIN REORGANIZADA -->
+    <div id="screen-login" class="screen">
+        <h1 id="login-title">Configurar Partida</h1>
+        <input type="text" id="username" placeholder="Tu nombre o nick...">
+        
+        <div id="join-fields" style="display: none;">
+            <input type="text" id="join-code" placeholder="Pega el código de la sala...">
+        </div>
+        
+        <button id="connect-btn" onclick="processConnection()">Entrar a la Sala</button>
+        <button onclick="showScreen('screen-mode')" style="background-color: #333; margin-top: 5px; font-size: 14px; padding: 8px;">Volver atrás</button>
+    </div>
+
+    <!-- LOBBY -->
+    <div id="screen-lobby" class="screen">
+        <h1>Sala de Espera</h1>
+        <p>Comparte este código con tus amigos:</p>
+        <div class="code-box" id="room-code-display">Generando código seguro...</div>
+        
+        <p>Jugadores conectados: (<span id="player-count">1</span>)</p>
+        <div class="player-list" id="lobby-players"></div>
+        
+        <div id="admin-controls" style="display: none;">
+            <button id="start-btn" onclick="startGame()" disabled>Mínimo 3 jugadores</button>
+        </div>
+        <div id="player-wait-msg">
+            <p>Esperando a que el creador inicie la partida...</p>
+        </div>
+    </div>
+
+    <!-- JUEGO -->
+    <div id="screen-game" class="screen">
+        <h1>¡Partida Iniciada!</h1>
+        <p>Tu identidad secreta es:</p>
+        <div id="role-display"></div>
+        
+        <div id="admin-reset-control" style="display: none;">
+            <hr style="border-color: #1f4068; margin: 20px 0;">
+            <button onclick="resetGame()" style="background-color: #1f4068;">Parar Juego (Volver al Lobby)</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const prefijos = ["Super", "Mega", "Mini", "Laser", "Retro", "Cyber", "Eco", "Crypto", "Neo", "Hiper", "Master", "Ultra", "Macro", "Nano", "Shadow", "Space", "Quantum", "Pixel"];
+    const sustantivos = [
+        "Manzana", "Pizza", "Hamburguesa", "Sushi", "Taco", "Chocolate", "Café", "Helado", "Plátano", "Pasta", "Queso", "Tarta", "Zumo", "Paella", "Croqueta",
+        "Televisor", "Minecraft", "Impresora 3D", "Móvil", "Ordenador", "Consola", "Ratón", "Teclado", "Robot", "Dron", "Cascos", "Pantalla", "Software", "Satélite",
+        "Coche", "Avión", "Barco", "Moto", "Bici", "Tractor", "Cohete", "Submarino", "Tren", "Helicóptero", "Monopatín", "Autobús", "Camión", "Teleférico",
+        "Estuche", "Mesa", "Silla", "Lámpara", "Espejo", "Reloj", "Libro", "Sofá", "Cama", "Llave", "Maleta", "Mochila", "Bolígrafo", "Tijeras", "Martillo", "Cuchara",
+        "Fútbol", "Baloncesto", "Tenis", "Gimnasio", "Guitarra", "Piano", "Cine", "Teatro", "Ajedrez", "Pádel", "Surf", "Skate", "Piscina",
+        "Perro", "Gato", "León", "Tigre", "Oso", "Delfín", "Águila", "Tiburón", "Caballo", "Elefante", "Lobo", "Zorro", "Loro", "Serpiente", "Girasol", "Árbol",
+        "Playa", "Montaña", "Bosque", "Desierto", "Isla", "Ciudad", "Pueblo", "Castillo", "Museo", "Estadio", "Parque", "Hotel", "Aeropuerto", "Planeta",
+        "Camiseta", "Pantalón", "Zapatillas", "Gorra", "Gafas", "Anillo", "Chaqueta", "Sombrero", "Botas", "Guantes", "Bufanda", "Cinturón",
+        "Médico", "Bombero", "Policía", "Astronauta", "Científico", "Chef", "Piloto", "Pintor", "Músico", "Pirata", "Ninja", "Mago", "Detective", "Minero"
+    ];
+    const adjetivos = ["Gigante", "Invisible", "Volador", "Espacial", "Luminoso", "Mágico", "Radiactivo", "Virtual", "Digital", "Antiguo", "Futurista", "Supersónico", "Atómico", "Galáctico", "Subterráneo", "Sideral", "Tóxico", "Mutante", "Robótico", "Prehistórico", "Magnético"];
+
+    function generarBancoDePalabras() {
+        const banco = [];
+        sustantivos.forEach(s => banco.push(s));
+        sustantivos.forEach(s => adjetivos.forEach(a => banco.push(`${s} ${a}`)));
+        prefijos.forEach(p => sustantivos.forEach(s => banco.push(`${p}${s.toLowerCase()}`)));
+        return banco;
+    }
+
+    const palabras = generarBancoDePalabras();
+    let peer = null, connections = [], connToAdmin = null;
+    let currentUser = "", isAdmin = false, listaJugadores = [], selectedMode = "";
+
+    const peerConfig = { host: '0.peerjs.com', port: 443, secure: true, pingInterval: 3000 };
+
+    function selectMode(mode) {
+        selectedMode = mode;
+        showScreen('screen-login');
+        if (mode === 'create') {
+            document.getElementById('login-title').innerText = "Crear Sala";
+            document.getElementById('join-fields').style.display = 'none';
+        } else {
+            document.getElementById('login-title').innerText = "Unirse a Sala";
+            document.getElementById('join-fields').style.display = 'block';
+        }
+    }
+
+    function processConnection() {
+        const name = document.getElementById('username').value.trim();
+        if (!name) return alert("Escribe tu nombre.");
+        currentUser = name;
+
+        if (selectedMode === 'create') {
+            initAsAdmin();
+        } else {
+            initAsPlayer();
+        }
+    }
+
+    function initAsAdmin() {
+        isAdmin = true;
+        listaJugadores = [currentUser];
+        peer = new Peer(peerConfig);
+        
+        peer.on('open', (id) => {
+            document.getElementById('room-code-display').innerText = id;
+            showScreen('screen-lobby');
+            updateLobbyUI();
+        });
+
+        peer.on('error', (err) => {
+            alert("Error de red: " + err.type);
+        });
+
+        peer.on('connection', (conn) => {
+            connections.push(conn);
+            conn.on('data', (data) => {
+                if (data.type === 'join') {
+                    let finalName = data.name;
+                    let contador = 1;
+                    while (listaJugadores.includes(finalName)) {
+                        finalName = `${data.name} (${contador})`;
+                        contador++;
+                    }
+                    conn.peerUserName = finalName; 
+                    listaJugadores.push(finalName);
+                    updateLobbyUI();
+                    broadcast({ type: 'update', players: listaJugadores });
+                }
+            });
+
+            conn.on('close', () => {
+                connections = connections.filter(c => c !== conn);
+                if (conn.peerUserName) listaJugadores = listaJugadores.filter(p => p !== conn.peerUserName);
+                updateLobbyUI();
+                broadcast({ type: 'update', players: listaJugadores });
+                if (document.getElementById('screen-game').classList.contains('active')) {
+                    alert("Un jugador se desconectó. Volviendo al lobby.");
+                    resetGame();
+                }
+            });
+        });
+    }
+
+    function initAsPlayer() {
+        const code = document.getElementById('join-code').value.trim();
+        if (!code) return alert("Pega el código de la sala.");
+        isAdmin = false;
+        peer = new Peer(peerConfig);
+
+        peer.on('open', () => {
+            connToAdmin = peer.connect(code, { reliable: true });
+            connToAdmin.on('open', () => {
+                connToAdmin.send({ type: 'join', name: currentUser });
+                showScreen('screen-lobby');
+            });
+
+            connToAdmin.on('data', (data) => {
+                if (data.type === 'update') {
+                    listaJugadores = data.players;
+                    updateLobbyUI();
+                } else if (data.type === 'start') {
+                    showGameScreen(data.impostor, data.palabra);
+                } else if (data.type === 'reset') {
+                    showScreen('screen-lobby');
+                }
+            });
+
+            connToAdmin.on('close', () => {
+                alert("Sala cerrada.");
+                location.reload(); 
+            });
+        });
+
+        peer.on('error', () => alert("No se pudo conectar a la sala. Revisa el código."));
+    }
+
+    function broadcast(data) {
+        connections.forEach(conn => { if (conn.open) conn.send(data); });
+    }
+
+    function updateLobbyUI() {
+        document.getElementById('player-count').innerText = listaJugadores.length;
+        const listDiv = document.getElementById('lobby-players');
+        listDiv.innerHTML = "";
+
+        listaJugadores.forEach((p, index) => {
+            let item = document.createElement('div');
+            item.style.margin = "5px 0";
+            item.innerHTML = index === 0 ? `• ${p} <span class="admin-badge">CREADOR</span>` : `• ${p}`;
+            listDiv.appendChild(item);
+        });
+
+        if (isAdmin) {
+            document.getElementById('admin-controls').style.display = 'block';
+            document.getElementById('player-wait-msg').style.display = 'none';
+            if (listaJugadores.length >= 3) {
+                document.getElementById('start-btn').disabled = false;
+                document.getElementById('start-btn').innerText = "Empezar Juego";
+            } else {
+                document.getElementById('start-btn').disabled = true;
+                document.getElementById('start-btn').innerText = `Faltan jugadores (${listaJugadores.length}/3)`;
+            }
+        } else {
+            document.getElementById('admin-controls').style.display = 'none';
+            document.getElementById('player-wait-msg').style.display = 'block';
+        }
+    }
+
+    function startGame() {
+        if (!isAdmin || listaJugadores.length < 3) return;
+        const randomIndex = Math.floor(Math.random() * listaJugadores.length);
+        const impostor = listaJugadores[randomIndex];
+        const palabra = palabras[Math.floor(Math.random() * palabras.length)];
+        broadcast({ type: 'start', impostor: impostor, palabra: palabra });
+        showGameScreen(impostor, palabra);
+    }
+
+    function showGameScreen(impostor, palabra) {
+        showScreen('screen-game');
+        const display = document.getElementById('role-display');
+        let miNombreEnLista = isAdmin ? listaJugadores[0] : listaJugadores.find(p => p.startsWith(currentUser));
+
+        if (miNombreEnLista === impostor) {
+            display.innerHTML = `
+                <div class="role-box impostor">ERES EL IMPOSTOR 🤫</div>
+                <p>No tienes palabra. ¡Camúflate con los civiles antes de que te descubran!</p>
+            `;
+        } else {
+            display.innerHTML = `
+                <div class="role-box civil">ERES CIVIL 👥</div>
+                <p>Tu palabra secreta es: <strong style="font-size: 20px; color: #4cd137;">${palabra}</strong></p>
+                <br><p>¡Describe tu palabra sin decirla directamente para pillar al impostor!</p>
+            `;
+        }
+        document.getElementById('admin-reset-control').style.display = isAdmin ? 'block' : 'none';
+    }
+
+    function resetGame() {
+        if (isAdmin) {
+            broadcast({ type: 'reset' });
+            showScreen('screen-lobby');
+            updateLobbyUI();
+        }
+    }
+
+    function showScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+    }
+</script>
+</body>
+</html>
