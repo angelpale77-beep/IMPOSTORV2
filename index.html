@@ -86,7 +86,7 @@
 </head>
 <body>
 <div class="container">
-    <!-- NUEVA PANTALLA INICIAL: SELECCIÓN DE MODO -->
+    <!-- SELECCIÓN DE MODO -->
     <div id="screen-mode" class="screen active">
         <h1>El Impostor</h1>
         <p>¿Qué quieres hacer?</p>
@@ -94,7 +94,7 @@
         <button onclick="selectMode('join')" style="background-color: #1f4068;">Unirse a una Sala</button>
     </div>
 
-    <!-- PANTALLA DE LOGIN REORGANIZADA -->
+    <!-- PANTALLA DE LOGIN -->
     <div id="screen-login" class="screen">
         <h1 id="login-title">Configurar Partida</h1>
         <input type="text" id="username" placeholder="Tu nombre o nick...">
@@ -139,7 +139,7 @@
 
 <script>
     const prefijos = ["Super", "Mega", "Mini", "Laser", "Retro", "Cyber", "Eco", "Crypto", "Neo", "Hiper", "Master", "Ultra", "Macro", "Nano", "Shadow", "Space", "Quantum", "Pixel"];
-    const sustantivos = [
+    const s_banco = [
         "Manzana", "Pizza", "Hamburguesa", "Sushi", "Taco", "Chocolate", "Café", "Helado", "Plátano", "Pasta", "Queso", "Tarta", "Zumo", "Paella", "Croqueta",
         "Televisor", "Minecraft", "Impresora 3D", "Móvil", "Ordenador", "Consola", "Ratón", "Teclado", "Robot", "Dron", "Cascos", "Pantalla", "Software", "Satélite",
         "Coche", "Avión", "Barco", "Moto", "Bici", "Tractor", "Cohete", "Submarino", "Tren", "Helicóptero", "Monopatín", "Autobús", "Camión", "Teleférico",
@@ -154,9 +154,9 @@
 
     function generarBancoDePalabras() {
         const banco = [];
-        sustantivos.forEach(s => banco.push(s));
-        sustantivos.forEach(s => adjetivos.forEach(a => banco.push(`${s} ${a}`)));
-        prefijos.forEach(p => sustantivos.forEach(s => banco.push(`${p}${s.toLowerCase()}`)));
+        s_banco.forEach(s => banco.push(s));
+        s_banco.forEach(s => adjetivos.forEach(a => banco.push(`${s} ${a}`)));
+        prefijos.forEach(p => s_banco.forEach(s => banco.push(`${p}${s.toLowerCase()}`)));
         return banco;
     }
 
@@ -164,7 +164,22 @@
     let peer = null, connections = [], connToAdmin = null;
     let currentUser = "", isAdmin = false, listaJugadores = [], selectedMode = "";
 
-    const peerConfig = { host: '0.peerjs.com', port: 443, secure: true, pingInterval: 3000 };
+    // CONFIGURACIÓN ARREGLADA: Servidores STUN de Google añadidos para solucionar problemas en móviles
+    const peerConfig = { 
+        host: '0.peerjs.com', 
+        port: 443, 
+        secure: true, 
+        pingInterval: 3000,
+        config: {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' }
+            ]
+        }
+    };
 
     function selectMode(mode) {
         selectedMode = mode;
@@ -260,7 +275,7 @@
             });
 
             connToAdmin.on('close', () => {
-                alert("Sala cerrada.");
+                alert("Sala cerrada o desconectada.");
                 location.reload(); 
             });
         });
